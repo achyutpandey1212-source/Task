@@ -1,11 +1,19 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { attemptService } from '../services/attemptService';
 import { evaluationService } from '../services/evaluationService';
 import { Attempt, Submission, Evaluation, Problem, SubmitSolutionPayload } from '../types';
+import { LandingNavbar } from '../components/landing/LandingNavbar';
+import { LandingFooter } from '../components/landing/LandingFooter';
+import { TornPaper } from '../components/landing/TornPaper';
+import { PushPin } from '../components/landing/TactileAccents';
+import { DesignCanvasWIP } from '../components/attempts/DesignCanvasWIP';
+import { EvaluationReport } from '../components/evaluations/EvaluationReport';
+import { SketchUnderline } from '../components/landing/HandDrawnDoodles';
 
 export const AttemptWorkspacePage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
 
   const [attempt, setAttempt] = useState<Attempt | null>(null);
   const [submission, setSubmission] = useState<Submission | null>(null);
@@ -19,7 +27,7 @@ export const AttemptWorkspacePage: React.FC = () => {
 
   const pollingRef = useRef<number | null>(null);
 
-  // Form state
+  // Form state for structured-text submission
   const [formData, setFormData] = useState<SubmitSolutionPayload>({
     requirements: { assumptions: '', constraints: '' },
     design: { classes: '', relationships: '', interfaces: '' },
@@ -42,7 +50,6 @@ export const AttemptWorkspacePage: React.FC = () => {
         setEvaluation(ev);
         if (ev.status === 'COMPLETED' || ev.status === 'FAILED') {
           stopPolling();
-          // Update attempt state to reflect terminal status
           if (id) {
             const data = await attemptService.getById(id);
             setAttempt(data.attempt);
@@ -68,7 +75,7 @@ export const AttemptWorkspacePage: React.FC = () => {
         setProblem(data.attempt.problemId as Problem);
       }
 
-      // If attempt is EVALUATING or evaluation is PENDING, initiate polling
+      // If evaluating or pending, continue polling
       if (
         data.evaluation &&
         (data.evaluation.status === 'PENDING' || data.attempt.status === 'EVALUATING')
@@ -94,7 +101,7 @@ export const AttemptWorkspacePage: React.FC = () => {
     if (!id) return;
 
     if (!formData.design.classes.trim()) {
-      alert('Please fill out the Classes design section before submitting.');
+      alert('Please define your classes and roles in the Design section before submitting.');
       return;
     }
 
@@ -104,14 +111,12 @@ export const AttemptWorkspacePage: React.FC = () => {
       setSuccessMessage(null);
 
       const result = await attemptService.submit(id, formData);
-      setSuccessMessage('Submission saved successfully. Evaluation initiated.');
+      setSuccessMessage('Design submitted successfully. Evaluation engine engaged.');
 
-      // Start polling with returned evaluationId
       if (result.evaluationId) {
         startPolling(result.evaluationId);
       }
 
-      // Refresh attempt data to reflect submitted / evaluating state
       await fetchAttemptData();
     } catch (err: any) {
       setError(err?.response?.data?.error?.message || err.message || 'Submission failed');
@@ -120,476 +125,655 @@ export const AttemptWorkspacePage: React.FC = () => {
     }
   };
 
-  if (loading) {
-    return (
-      <div style={{ fontFamily: 'monospace', padding: '24px', maxWidth: '900px', margin: '0 auto' }}>
-        <p>Loading attempt workspace...</p>
-      </div>
-    );
-  }
-
-  if (error && !attempt) {
-    return (
-      <div style={{ fontFamily: 'monospace', padding: '24px', maxWidth: '900px', margin: '0 auto' }}>
-        <p style={{ color: 'red' }}>Error: {error}</p>
-        <Link to="/attempts">← Back to My Attempts</Link>
-      </div>
-    );
-  }
+  const handleStartNewAttempt = async () => {
+    if (!problem) return;
+    try {
+      const newAtt = await attemptService.create(problem.id);
+      navigate(`/attempts/${newAtt.id}`);
+    } catch (err: any) {
+      alert('Failed to initialize new attempt: ' + (err.message || 'Error'));
+    }
+  };
 
   const isDraft = attempt?.status === 'DRAFT';
   const isEvaluating = attempt?.status === 'EVALUATING' || evaluation?.status === 'PENDING';
   const isCompleted = attempt?.status === 'COMPLETED' || evaluation?.status === 'COMPLETED';
   const isFailed = attempt?.status === 'FAILED' || evaluation?.status === 'FAILED';
 
-  const formatCriterionName = (key: string) => {
-    return key
-      .split('_')
-      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-      .join(' ');
-  };
-
-  const getStatusBadgeColor = (status?: string) => {
+  const statusBadge = (status?: string) => {
     switch (status) {
       case 'COMPLETED':
-        return { border: 'green', color: 'green' };
+        return { bg: '#bbf7d0', text: '#14532d', label: 'EVALUATION COMPLETED' };
       case 'EVALUATING':
       case 'PENDING':
-        return { border: 'blue', color: 'blue' };
+        return { bg: '#FEDE8C', text: '#000000', label: 'EVALUATION IN PROGRESS' };
       case 'FAILED':
-        return { border: 'red', color: 'red' };
+        return { bg: '#fecaca', text: '#7f1d1d', label: 'EVALUATION FAILED' };
+      case 'SUBMITTED':
+        return { bg: '#D5BDFF', text: '#000000', label: 'SUBMISSION PERSISTED' };
       default:
-        return { border: 'orange', color: '#b25900' };
+        return { bg: '#FFFFFF', text: '#000000', label: 'WORKSPACE DRAFT' };
     }
   };
 
-  const statusColors = getStatusBadgeColor(attempt?.status);
+  const badge = statusBadge(attempt?.status);
 
   return (
-    <div style={{ fontFamily: 'monospace', padding: '24px', maxWidth: '900px', margin: '0 auto' }}>
-      <p>
-        <Link to="/attempts">← Back to My Attempts</Link> | <Link to="/problems">All Problems</Link>
-      </p>
-      <hr />
+    <div
+      className="bg-graph-paper"
+      style={{
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        color: '#000000',
+        overflowX: 'hidden',
+      }}
+    >
+      <LandingNavbar activePage="attempts" />
 
-      {/* Header and status */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h2>Attempt: {problem?.title || 'LLD Practice'}</h2>
-          <div style={{ fontSize: '13px', color: '#555' }}>
-            Started at: {attempt ? new Date(attempt.startedAt).toLocaleString() : ''}
-          </div>
-        </div>
-        <div>
-          <span
+      <main style={{ flex: 1 }}>
+        <section
+          style={{
+            maxWidth: '1240px',
+            margin: '0 auto',
+            padding: '36px 24px 80px',
+          }}
+        >
+          {/* Top Breadcrumbs & Actions */}
+          <div
             style={{
-              padding: '6px 12px',
-              fontWeight: 'bold',
-              border: '2px solid',
-              borderColor: statusColors.border,
-              color: statusColors.color,
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '20px',
+              flexWrap: 'wrap',
+              gap: '12px',
             }}
           >
-            STATUS: {attempt?.status}
-          </span>
-        </div>
-      </div>
-
-      {successMessage && (
-        <div style={{ margin: '16px 0', padding: '12px', border: '1px solid green', color: 'green' }}>
-          {successMessage}
-        </div>
-      )}
-
-      {error && (
-        <div style={{ margin: '16px 0', padding: '12px', border: '1px solid red', color: 'red' }}>
-          {error}
-        </div>
-      )}
-
-      {/* Problem context collapsible banner */}
-      {problem && (
-        <details style={{ margin: '16px 0', padding: '12px', border: '1px solid #aaa', background: '#f9f9f9' }}>
-          <summary style={{ cursor: 'pointer', fontWeight: 'bold' }}>
-            [Click to View / Hide Problem Requirements & Context]
-          </summary>
-          <div style={{ marginTop: '10px' }}>
-            <p><strong>Description:</strong> {problem.description}</p>
-            <strong>Requirements:</strong>
-            <ol>
-              {problem.requirements.map((r, i) => (
-                <li key={i}>{r}</li>
-              ))}
-            </ol>
-            {problem.constraints && problem.constraints.length > 0 && (
-              <>
-                <strong>Constraints:</strong>
-                <ul>
-                  {problem.constraints.map((c, i) => (
-                    <li key={i}>{c}</li>
-                  ))}
-                </ul>
-              </>
-            )}
-          </div>
-        </details>
-      )}
-
-      {/* EVALUATION PROGRESS BANNER */}
-      {isEvaluating && (
-        <div
-          style={{
-            margin: '20px 0',
-            padding: '16px',
-            border: '2px solid blue',
-            background: '#f0f4ff',
-          }}
-        >
-          <h3 style={{ margin: '0 0 8px 0', color: 'blue' }}>
-            Evaluation in Progress...
-          </h3>
-          <p style={{ margin: '4px 0' }}>
-            Your solution is safely saved in MongoDB. The AI evaluator is assessing your low-level design against the rubric.
-          </p>
-          <p style={{ margin: '4px 0', fontSize: '12px', color: '#555' }}>
-            Polling updates every 2.5 seconds. Please wait...
-          </p>
-        </div>
-      )}
-
-      {/* EVALUATION FAILED BANNER */}
-      {isFailed && (
-        <div
-          style={{
-            margin: '20px 0',
-            padding: '16px',
-            border: '2px solid red',
-            background: '#fff0f0',
-          }}
-        >
-          <h3 style={{ margin: '0 0 8px 0', color: 'red' }}>
-            Evaluation Failed
-          </h3>
-          <p style={{ margin: '4px 0' }}>
-            Evaluation could not be completed at this time ({evaluation?.errorMessage || 'AI provider unavailable'}).
-          </p>
-          <p style={{ margin: '4px 0', fontWeight: 'bold' }}>
-            Your submitted solution is completely preserved below.
-          </p>
-        </div>
-      )}
-
-      {/* COMPLETED EVALUATION RESULTS */}
-      {isCompleted && evaluation && (
-        <div
-          style={{
-            margin: '20px 0',
-            padding: '20px',
-            border: '2px solid green',
-            background: '#f8fff8',
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h2 style={{ margin: 0, color: 'green' }}>Structured Feedback</h2>
-            <div style={{ fontSize: '24px', fontWeight: 'bold', color: 'green' }}>
-              Overall Score: {evaluation.overallScore ?? 'N/A'} / 10
+            <div style={{ display: 'flex', gap: '16px', fontFamily: "'JetBrains Mono', monospace", fontSize: '13px', fontWeight: 700 }}>
+              <Link to="/attempts">← MY ATTEMPTS</Link>
+              {problem && <Link to={`/problems/${problem.id}`}>VIEW CASE SPECIFICATION</Link>}
             </div>
+
+            <span
+              style={{
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: '12px',
+                fontWeight: 900,
+                backgroundColor: badge.bg,
+                color: badge.text,
+                padding: '4px 12px',
+                border: '2px solid #000000',
+                boxShadow: '2px 2px 0px #000000',
+              }}
+            >
+              STATUS: {badge.label}
+            </span>
           </div>
 
-          {evaluation.summary && (
-            <div style={{ margin: '16px 0', padding: '12px', background: '#fff', border: '1px solid #ddd' }}>
-              <strong>Executive Summary:</strong>
-              <p style={{ margin: '6px 0 0 0' }}>{evaluation.summary}</p>
+          {/* Loading State */}
+          {loading && (
+            <div style={{ maxWidth: '640px', margin: '48px auto', textAlign: 'center' }}>
+              <TornPaper
+                color="lavender"
+                rotation={-0.4}
+                tornEdges="both"
+                style={{ padding: '40px 28px', border: '2px solid #000000', boxShadow: '4px 4px 0px #000000' }}
+              >
+                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '17px', fontWeight: 800 }}>
+                  SETTING UP YOUR WORKSPACE...
+                </div>
+                <p style={{ margin: '8px 0 0 0', fontSize: '14px', color: '#333333' }}>
+                  Loading attempt state and submission record.
+                </p>
+              </TornPaper>
             </div>
           )}
 
-          <h3 style={{ marginTop: '24px' }}>Rubric Criteria Analysis (7 Dimensions)</h3>
-
-          {evaluation.criteria.map((c, idx) => (
+          {/* Error Banner */}
+          {error && (
             <div
-              key={idx}
               style={{
-                margin: '16px 0',
-                padding: '16px',
-                border: '1px solid #ccc',
-                background: '#fff',
+                backgroundColor: '#FEF2F2',
+                border: '2px solid #dc2626',
+                color: '#991b1b',
+                padding: '12px 18px',
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: '13px',
+                marginBottom: '24px',
+                boxShadow: '3px 3px 0px #dc2626',
               }}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h4 style={{ margin: 0 }}>
-                  {idx + 1}. {formatCriterionName(c.criterion)}
-                </h4>
-                <div style={{ fontWeight: 'bold', fontSize: '16px' }}>
-                  Score: {c.score} / 10
-                  <span
+              <strong>ERROR:</strong> {error}
+            </div>
+          )}
+
+          {/* Success Banner */}
+          {successMessage && (
+            <div
+              style={{
+                backgroundColor: '#F0FDF4',
+                border: '2px solid #16a34a',
+                color: '#166534',
+                padding: '12px 18px',
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: '13px',
+                marginBottom: '24px',
+                boxShadow: '3px 3px 0px #16a34a',
+              }}
+            >
+              <strong>SUCCESS:</strong> {successMessage}
+            </div>
+          )}
+
+          {!loading && attempt && (
+            <div>
+              {/* Workspace Header */}
+              <div
+                style={{
+                  borderBottom: '2px solid #000000',
+                  paddingBottom: '20px',
+                  marginBottom: '32px',
+                }}
+              >
+                <div
+                  style={{
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: '12px',
+                    fontWeight: 800,
+                    backgroundColor: '#000000',
+                    color: '#FFFFFF',
+                    padding: '2px 8px',
+                    display: 'inline-block',
+                    marginBottom: '8px',
+                  }}
+                >
+                  ENGINEERING WORKSPACE
+                </div>
+                <h1
+                  style={{
+                    fontSize: 'clamp(28px, 4vw, 42px)',
+                    fontWeight: 900,
+                    margin: 0,
+                    textTransform: 'uppercase',
+                    letterSpacing: '-0.02em',
+                  }}
+                >
+                  {problem?.title || 'LLD System Attempt'}
+                </h1>
+                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '12px', color: '#555555', marginTop: '6px' }}>
+                  Started: {new Date(attempt.startedAt).toLocaleString()}
+                  {attempt.submittedAt && ` | Submitted: ${new Date(attempt.submittedAt).toLocaleString()}`}
+                </div>
+              </div>
+
+              {/* ========================================================================= */}
+              {/* EVALUATING PROGRESS BANNER                                                */}
+              {/* ========================================================================= */}
+              {isEvaluating && (
+                <div
+                  style={{
+                    backgroundColor: '#FEDE8C',
+                    border: '2px solid #000000',
+                    padding: '28px',
+                    boxShadow: '4px 4px 0px #000000',
+                    marginBottom: '36px',
+                    textAlign: 'center',
+                  }}
+                >
+                  <div
                     style={{
-                      marginLeft: '12px',
-                      fontSize: '12px',
-                      color: '#666',
-                      fontWeight: 'normal',
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: '18px',
+                      fontWeight: 900,
+                      color: '#000000',
+                      marginBottom: '8px',
                     }}
                   >
-                    (Confidence: {Math.round(c.confidence * 100)}%)
-                  </span>
+                    REVIEWING YOUR DESIGN...
+                  </div>
+                  <p style={{ margin: 0, fontSize: '14px', color: '#222222', maxWidth: '600px', marginInline: 'auto' }}>
+                    The evaluation engine is examining your assumptions, class responsibilities, interfaces, and trade-offs against the rubric. This page will update automatically.
+                  </p>
+                  <div style={{ marginTop: '16px' }}>
+                    <SketchUnderline width={140} style={{ margin: '0 auto' }} />
+                  </div>
                 </div>
-              </div>
+              )}
 
-              <div style={{ marginTop: '12px' }}>
-                <p style={{ margin: '6px 0' }}>
-                  <strong>Evidence (from your design):</strong>
-                </p>
-                <div style={{ background: '#f5f5f5', padding: '8px', borderLeft: '3px solid #666' }}>
-                  {c.evidence}
+              {/* ========================================================================= */}
+              {/* COMPLETED EVALUATION REPORT                                               */}
+              {/* ========================================================================= */}
+              {isCompleted && evaluation && (
+                <div style={{ marginBottom: '48px' }}>
+                  <EvaluationReport
+                    evaluation={evaluation}
+                    problemTitle={problem?.title}
+                    attemptStartedAt={attempt.startedAt}
+                    attemptCompletedAt={attempt.completedAt || undefined}
+                    onRetry={handleStartNewAttempt}
+                  />
                 </div>
+              )}
 
-                <p style={{ margin: '10px 0 4px 0' }}>
-                  <strong>Concern / Gap:</strong>
-                </p>
-                <div style={{ background: '#fff9e6', padding: '8px', borderLeft: '3px solid #f0ad4e' }}>
-                  {c.concern}
+              {/* ========================================================================= */}
+              {/* FAILED EVALUATION NOTICE                                                  */}
+              {/* ========================================================================= */}
+              {isFailed && (
+                <div
+                  style={{
+                    backgroundColor: '#FEF2F2',
+                    border: '2px solid #b91c1c',
+                    padding: '28px',
+                    boxShadow: '4px 4px 0px #b91c1c',
+                    marginBottom: '36px',
+                  }}
+                >
+                  <div
+                    style={{
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: '16px',
+                      fontWeight: 900,
+                      color: '#991b1b',
+                      marginBottom: '8px',
+                    }}
+                  >
+                    THE REVIEW COULD NOT BE COMPLETED
+                  </div>
+                  <p style={{ margin: '0 0 16px 0', fontSize: '14px', color: '#333333' }}>
+                    {evaluation?.errorMessage ||
+                      'The AI evaluation providers were temporarily unavailable. Your submitted design is preserved in the database.'}
+                  </p>
+                  <button
+                    onClick={handleStartNewAttempt}
+                    style={{
+                      backgroundColor: '#000000',
+                      color: '#FFFFFF',
+                      border: '2px solid #000000',
+                      padding: '8px 18px',
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    START A NEW ATTEMPT →
+                  </button>
                 </div>
+              )}
 
-                <p style={{ margin: '10px 0 4px 0' }}>
-                  <strong>Actionable Suggestion:</strong>
-                </p>
-                <div style={{ background: '#eef9ff', padding: '8px', borderLeft: '3px solid #5bc0de' }}>
-                  {c.suggestion}
+              {/* ========================================================================= */}
+              {/* PRESERVED SUBMISSION (When not in Draft)                                  */}
+              {/* ========================================================================= */}
+              {!isDraft && submission && (
+                <div
+                  style={{
+                    backgroundColor: '#FFFFFF',
+                    border: '2px solid #000000',
+                    padding: '32px 28px',
+                    boxShadow: '4px 4px 0px #000000',
+                    borderRadius: '2px',
+                    marginBottom: '40px',
+                  }}
+                >
+                  <div
+                    style={{
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: '12px',
+                      fontWeight: 800,
+                      backgroundColor: '#FEDE8C',
+                      padding: '2px 8px',
+                      display: 'inline-block',
+                      marginBottom: '8px',
+                      border: '1px solid #000000',
+                    }}
+                  >
+                    PRESERVED SUBMISSION RECORD (VERSION {submission.version})
+                  </div>
+                  <h2 style={{ fontSize: '20px', fontWeight: 900, margin: '0 0 20px 0' }}>
+                    Your Submitted Architecture
+                  </h2>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
+                    {/* Assumptions & Constraints */}
+                    <div style={{ backgroundColor: '#F8FAFC', border: '1.5px solid #000000', padding: '16px' }}>
+                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 800, fontSize: '12px', marginBottom: '6px' }}>
+                        1. REQUIREMENTS SCOPE
+                      </div>
+                      <div style={{ fontSize: '13px', marginBottom: '8px' }}>
+                        <strong>Assumptions:</strong> {submission.requirements.assumptions || '(none)'}
+                      </div>
+                      <div style={{ fontSize: '13px' }}>
+                        <strong>Constraints:</strong> {submission.requirements.constraints || '(none)'}
+                      </div>
+                    </div>
+
+                    {/* Classes, Relations, Interfaces */}
+                    <div style={{ backgroundColor: '#F8FAFC', border: '1.5px solid #000000', padding: '16px' }}>
+                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 800, fontSize: '12px', marginBottom: '6px' }}>
+                        2. DOMAIN CONTRACTS
+                      </div>
+                      <div style={{ fontSize: '13px', marginBottom: '8px' }}>
+                        <strong>Classes:</strong> {submission.design.classes}
+                      </div>
+                      <div style={{ fontSize: '13px', marginBottom: '8px' }}>
+                        <strong>Relationships:</strong> {submission.design.relationships || '(none)'}
+                      </div>
+                      <div style={{ fontSize: '13px' }}>
+                        <strong>Interfaces:</strong> {submission.design.interfaces || '(none)'}
+                      </div>
+                    </div>
+
+                    {/* Reasoning & Trade-offs */}
+                    <div style={{ backgroundColor: '#F8FAFC', border: '1.5px solid #000000', padding: '16px' }}>
+                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 800, fontSize: '12px', marginBottom: '6px' }}>
+                        3. REASONING & TRADE-OFFS
+                      </div>
+                      <div style={{ fontSize: '13px', marginBottom: '8px' }}>
+                        <strong>Decisions:</strong> {submission.reasoning.decisions || '(none)'}
+                      </div>
+                      <div style={{ fontSize: '13px', marginBottom: '8px' }}>
+                        <strong>Patterns:</strong> {submission.reasoning.patterns || '(none)'}
+                      </div>
+                      <div style={{ fontSize: '13px' }}>
+                        <strong>Trade-offs:</strong> {submission.reasoning.tradeoffs || '(none)'}
+                      </div>
+                    </div>
+
+                    {/* Edge Cases */}
+                    <div style={{ backgroundColor: '#F8FAFC', border: '1.5px solid #000000', padding: '16px' }}>
+                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 800, fontSize: '12px', marginBottom: '6px' }}>
+                        4. EDGE CASES & TESTABILITY
+                      </div>
+                      <div style={{ fontSize: '13px' }}>
+                        {submission.edgeCases || '(none)'}
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {/* ========================================================================= */}
+              {/* DRAFT WORKSPACE (Interactive Design Canvas + Structured Specification)     */}
+              {/* ========================================================================= */}
+              {isDraft && (
+                <div>
+                  {/* Visual Design Canvas — Work in Progress */}
+                  <DesignCanvasWIP />
+
+                  {/* Submission Form */}
+                  <form onSubmit={handleSubmit}>
+                    <div
+                      style={{
+                        backgroundColor: '#FFFFFF',
+                        border: '2px solid #000000',
+                        padding: '32px 28px',
+                        boxShadow: '6px 6px 0px #000000',
+                        borderRadius: '2px',
+                        position: 'relative',
+                      }}
+                    >
+                      <PushPin color="#FEDE8C" style={{ top: '16px', right: '28px' }} />
+
+                      <div style={{ marginBottom: '24px', borderBottom: '2px solid #000000', paddingBottom: '16px' }}>
+                        <div
+                          style={{
+                            fontFamily: "'JetBrains Mono', monospace",
+                            fontSize: '12px',
+                            fontWeight: 800,
+                            backgroundColor: '#000000',
+                            color: '#FFFFFF',
+                            padding: '2px 8px',
+                            display: 'inline-block',
+                            marginBottom: '6px',
+                          }}
+                        >
+                          STRUCTURED LLD SPECIFICATION
+                        </div>
+                        <h2 style={{ fontSize: '24px', fontWeight: 900, margin: 0 }}>
+                          Submit Your Architecture
+                        </h2>
+                        <p style={{ margin: '6px 0 0 0', fontSize: '14px', color: '#555555' }}>
+                          Fill out the structured sections below. When ready, submit to receive rubric-grounded evaluation.
+                        </p>
+                      </div>
+
+                      {/* SECTION 1: UNDERSTAND (Assumptions & Constraints) */}
+                      <fieldset style={{ border: '1.5px solid #000000', padding: '20px', marginBottom: '24px', backgroundColor: '#F8FAFC' }}>
+                        <legend style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '13px', fontWeight: 800, padding: '0 8px', backgroundColor: '#FEDE8C', border: '1px solid #000000' }}>
+                          1. UNDERSTAND: ASSUMPTIONS & CONSTRAINTS
+                        </legend>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+                          <div>
+                            <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px' }}>
+                              Assumptions:
+                            </label>
+                            <textarea
+                              rows={4}
+                              style={{ width: '100%', fontFamily: "'JetBrains Mono', monospace", fontSize: '13px', padding: '10px', border: '1.5px solid #000000' }}
+                              placeholder="Operational scale, concurrency assumptions, customer types..."
+                              value={formData.requirements.assumptions}
+                              onChange={(e) =>
+                                setFormData({
+                                  ...formData,
+                                  requirements: { ...formData.requirements, assumptions: e.target.value },
+                                })
+                              }
+                            />
+                          </div>
+
+                          <div>
+                            <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px' }}>
+                              Constraints:
+                            </label>
+                            <textarea
+                              rows={4}
+                              style={{ width: '100%', fontFamily: "'JetBrains Mono', monospace", fontSize: '13px', padding: '10px', border: '1.5px solid #000000' }}
+                              placeholder="Hardware, barrier dimensions, memory, response latencies..."
+                              value={formData.requirements.constraints}
+                              onChange={(e) =>
+                                setFormData({
+                                  ...formData,
+                                  requirements: { ...formData.requirements, constraints: e.target.value },
+                                })
+                              }
+                            />
+                          </div>
+                        </div>
+                      </fieldset>
+
+                      {/* SECTION 2: DESIGN (Classes, Relationships, Interfaces) */}
+                      <fieldset style={{ border: '1.5px solid #000000', padding: '20px', marginBottom: '24px', backgroundColor: '#F8FAFC' }}>
+                        <legend style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '13px', fontWeight: 800, padding: '0 8px', backgroundColor: '#FEDE8C', border: '1px solid #000000' }}>
+                          2. DESIGN: DOMAIN ARCHITECTURE & CONTRACTS
+                        </legend>
+
+                        <div style={{ marginBottom: '16px' }}>
+                          <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px' }}>
+                            Classes & Responsibilities (Required):
+                          </label>
+                          <textarea
+                            rows={7}
+                            required
+                            style={{ width: '100%', fontFamily: "'JetBrains Mono', monospace", fontSize: '13px', padding: '10px', border: '1.5px solid #000000' }}
+                            placeholder="class ParkingLot { List<Floor> floors; Ticket issueTicket(Vehicle v); ... }"
+                            value={formData.design.classes}
+                            onChange={(e) =>
+                              setFormData({
+                                ...formData,
+                                design: { ...formData.design, classes: e.target.value },
+                              })
+                            }
+                          />
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+                          <div>
+                            <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px' }}>
+                              Relationships:
+                            </label>
+                            <textarea
+                              rows={4}
+                              style={{ width: '100%', fontFamily: "'JetBrains Mono', monospace", fontSize: '13px', padding: '10px', border: '1.5px solid #000000' }}
+                              placeholder="ParkingLot has-many Floors; Floor contains ParkingSpots (1..*)..."
+                              value={formData.design.relationships}
+                              onChange={(e) =>
+                                setFormData({
+                                  ...formData,
+                                  design: { ...formData.design, relationships: e.target.value },
+                                })
+                              }
+                            />
+                          </div>
+
+                          <div>
+                            <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px' }}>
+                              Interfaces & Polymorphism:
+                            </label>
+                            <textarea
+                              rows={4}
+                              style={{ width: '100%', fontFamily: "'JetBrains Mono', monospace", fontSize: '13px', padding: '10px', border: '1.5px solid #000000' }}
+                              placeholder="interface IPricingStrategy { double compute(Ticket t); }..."
+                              value={formData.design.interfaces}
+                              onChange={(e) =>
+                                setFormData({
+                                  ...formData,
+                                  design: { ...formData.design, interfaces: e.target.value },
+                                })
+                              }
+                            />
+                          </div>
+                        </div>
+                      </fieldset>
+
+                      {/* SECTION 3: REASONING (Decisions, Patterns, Trade-offs) */}
+                      <fieldset style={{ border: '1.5px solid #000000', padding: '20px', marginBottom: '24px', backgroundColor: '#F8FAFC' }}>
+                        <legend style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '13px', fontWeight: 800, padding: '0 8px', backgroundColor: '#FEDE8C', border: '1px solid #000000' }}>
+                          3. REASON: DECISIONS & TRADE-OFFS
+                        </legend>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '16px' }}>
+                          <div>
+                            <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px' }}>
+                              Key Decisions:
+                            </label>
+                            <textarea
+                              rows={4}
+                              style={{ width: '100%', fontFamily: "'JetBrains Mono', monospace", fontSize: '13px', padding: '10px', border: '1.5px solid #000000' }}
+                              placeholder="Why responsibilities were allocated this way..."
+                              value={formData.reasoning.decisions}
+                              onChange={(e) =>
+                                setFormData({
+                                  ...formData,
+                                  reasoning: { ...formData.reasoning, decisions: e.target.value },
+                                })
+                              }
+                            />
+                          </div>
+
+                          <div>
+                            <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px' }}>
+                              Design Patterns:
+                            </label>
+                            <textarea
+                              rows={4}
+                              style={{ width: '100%', fontFamily: "'JetBrains Mono', monospace", fontSize: '13px', padding: '10px', border: '1.5px solid #000000' }}
+                              placeholder="Strategy pattern for pricing, Factory for tickets..."
+                              value={formData.reasoning.patterns}
+                              onChange={(e) =>
+                                setFormData({
+                                  ...formData,
+                                  reasoning: { ...formData.reasoning, patterns: e.target.value },
+                                })
+                              }
+                            />
+                          </div>
+
+                          <div>
+                            <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px' }}>
+                              Trade-offs:
+                            </label>
+                            <textarea
+                              rows={4}
+                              style={{ width: '100%', fontFamily: "'JetBrains Mono', monospace", fontSize: '13px', padding: '10px', border: '1.5px solid #000000' }}
+                              placeholder="In-memory lookup speed vs memory consumption..."
+                              value={formData.reasoning.tradeoffs}
+                              onChange={(e) =>
+                                setFormData({
+                                  ...formData,
+                                  reasoning: { ...formData.reasoning, tradeoffs: e.target.value },
+                                })
+                              }
+                            />
+                          </div>
+                        </div>
+                      </fieldset>
+
+                      {/* SECTION 4: EDGE CASES */}
+                      <fieldset style={{ border: '1.5px solid #000000', padding: '20px', marginBottom: '28px', backgroundColor: '#F8FAFC' }}>
+                        <legend style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '13px', fontWeight: 800, padding: '0 8px', backgroundColor: '#FEDE8C', border: '1px solid #000000' }}>
+                          4. EDGE CASES & TESTABILITY
+                        </legend>
+                        <textarea
+                          rows={3}
+                          style={{ width: '100%', fontFamily: "'JetBrains Mono', monospace", fontSize: '13px', padding: '10px', border: '1.5px solid #000000' }}
+                          placeholder="Concurrency race conditions at gates, full parking lot, ticket lost..."
+                          value={formData.edgeCases}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              edgeCases: e.target.value,
+                            })
+                          }
+                        />
+                      </fieldset>
+
+                      {/* SUBMIT BUTTON ROW */}
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          flexWrap: 'wrap',
+                          gap: '16px',
+                          borderTop: '2px solid #000000',
+                          paddingTop: '20px',
+                        }}
+                      >
+                        <div style={{ fontSize: '13px', color: '#555555' }}>
+                          * Submitting persists your design and triggers rubric-based evaluation.
+                        </div>
+
+                        <button
+                          type="submit"
+                          disabled={submitting}
+                          style={{
+                            backgroundColor: '#FEDE8C',
+                            color: '#000000',
+                            border: '2px solid #000000',
+                            padding: '14px 32px',
+                            fontFamily: "'JetBrains Mono', monospace",
+                            fontSize: '15px',
+                            fontWeight: 900,
+                            cursor: submitting ? 'not-allowed' : 'pointer',
+                            boxShadow: '4px 4px 0px #000000',
+                            transition: 'transform 0.1s ease',
+                          }}
+                        >
+                          {submitting ? 'PERSISTING & EVALUATING...' : 'SUBMIT DESIGN →'}
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+                </div>
+              )}
             </div>
-          ))}
-        </div>
-      )}
+          )}
+        </section>
+      </main>
 
-      {/* Submitted immutable solution display */}
-      {!isDraft && submission && (
-        <div style={{ marginTop: '20px', border: '1px solid #ccc', padding: '16px' }}>
-          <h3>Preserved Submitted Solution (Version {submission.version})</h3>
-          <p style={{ color: '#666', fontSize: '12px' }}>
-            Submitted at: {new Date(submission.createdAt).toLocaleString()}
-          </p>
-
-          <section style={{ margin: '16px 0' }}>
-            <h4>1. Requirements</h4>
-            <p><strong>Assumptions:</strong></p>
-            <pre style={{ background: '#eee', padding: '8px', whiteSpace: 'pre-wrap' }}>
-              {submission.requirements.assumptions || '(none)'}
-            </pre>
-            <p><strong>Constraints:</strong></p>
-            <pre style={{ background: '#eee', padding: '8px', whiteSpace: 'pre-wrap' }}>
-              {submission.requirements.constraints || '(none)'}
-            </pre>
-          </section>
-
-          <section style={{ margin: '16px 0' }}>
-            <h4>2. Domain Design</h4>
-            <p><strong>Classes & Responsibilities:</strong></p>
-            <pre style={{ background: '#eee', padding: '8px', whiteSpace: 'pre-wrap' }}>
-              {submission.design.classes}
-            </pre>
-            <p><strong>Relationships:</strong></p>
-            <pre style={{ background: '#eee', padding: '8px', whiteSpace: 'pre-wrap' }}>
-              {submission.design.relationships || '(none)'}
-            </pre>
-            <p><strong>Interfaces / Abstractions:</strong></p>
-            <pre style={{ background: '#eee', padding: '8px', whiteSpace: 'pre-wrap' }}>
-              {submission.design.interfaces || '(none)'}
-            </pre>
-          </section>
-
-          <section style={{ margin: '16px 0' }}>
-            <h4>3. Design Reasoning</h4>
-            <p><strong>Decisions:</strong></p>
-            <pre style={{ background: '#eee', padding: '8px', whiteSpace: 'pre-wrap' }}>
-              {submission.reasoning.decisions || '(none)'}
-            </pre>
-            <p><strong>Patterns:</strong></p>
-            <pre style={{ background: '#eee', padding: '8px', whiteSpace: 'pre-wrap' }}>
-              {submission.reasoning.patterns || '(none)'}
-            </pre>
-            <p><strong>Trade-offs:</strong></p>
-            <pre style={{ background: '#eee', padding: '8px', whiteSpace: 'pre-wrap' }}>
-              {submission.reasoning.tradeoffs || '(none)'}
-            </pre>
-          </section>
-
-          <section style={{ margin: '16px 0' }}>
-            <h4>4. Edge Cases</h4>
-            <pre style={{ background: '#eee', padding: '8px', whiteSpace: 'pre-wrap' }}>
-              {submission.edgeCases || '(none)'}
-            </pre>
-          </section>
-        </div>
-      )}
-
-      {/* DRAFT attempt: Interactive solution submission form */}
-      {isDraft && (
-        <form onSubmit={handleSubmit} style={{ marginTop: '20px' }}>
-          <h3>Structured LLD Solution Workspace (Draft)</h3>
-          <p style={{ color: '#555', fontSize: '13px' }}>
-            Fill in your structured design below and click Submit to start AI evaluation.
-          </p>
-
-          <fieldset style={{ margin: '16px 0', padding: '12px' }}>
-            <legend><strong>1. Requirements</strong></legend>
-            <div style={{ marginBottom: '10px' }}>
-              <label style={{ display: 'block', fontWeight: 'bold' }}>Assumptions:</label>
-              <textarea
-                rows={3}
-                style={{ width: '100%', fontFamily: 'monospace' }}
-                placeholder="Key assumptions about scale, concurrency, or domain rules..."
-                value={formData.requirements.assumptions}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    requirements: { ...formData.requirements, assumptions: e.target.value },
-                  })
-                }
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontWeight: 'bold' }}>Constraints:</label>
-              <textarea
-                rows={3}
-                style={{ width: '100%', fontFamily: 'monospace' }}
-                placeholder="Hardware, latency, memory, or business constraints..."
-                value={formData.requirements.constraints}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    requirements: { ...formData.requirements, constraints: e.target.value },
-                  })
-                }
-              />
-            </div>
-          </fieldset>
-
-          <fieldset style={{ margin: '16px 0', padding: '12px' }}>
-            <legend><strong>2. Domain Design</strong></legend>
-            <div style={{ marginBottom: '10px' }}>
-              <label style={{ display: 'block', fontWeight: 'bold' }}>Classes & Responsibilities (Required):</label>
-              <textarea
-                rows={7}
-                required
-                style={{ width: '100%', fontFamily: 'monospace' }}
-                placeholder="List classes, fields, and method signatures..."
-                value={formData.design.classes}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    design: { ...formData.design, classes: e.target.value },
-                  })
-                }
-              />
-            </div>
-            <div style={{ marginBottom: '10px' }}>
-              <label style={{ display: 'block', fontWeight: 'bold' }}>Relationships:</label>
-              <textarea
-                rows={3}
-                style={{ width: '100%', fontFamily: 'monospace' }}
-                placeholder="Composition, aggregation, association, inheritance relationships..."
-                value={formData.design.relationships}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    design: { ...formData.design, relationships: e.target.value },
-                  })
-                }
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontWeight: 'bold' }}>Interfaces & Abstractions:</label>
-              <textarea
-                rows={3}
-                style={{ width: '100%', fontFamily: 'monospace' }}
-                placeholder="Interfaces and polymorphism used..."
-                value={formData.design.interfaces}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    design: { ...formData.design, interfaces: e.target.value },
-                  })
-                }
-              />
-            </div>
-          </fieldset>
-
-          <fieldset style={{ margin: '16px 0', padding: '12px' }}>
-            <legend><strong>3. Design Reasoning</strong></legend>
-            <div style={{ marginBottom: '10px' }}>
-              <label style={{ display: 'block', fontWeight: 'bold' }}>Key Design Decisions:</label>
-              <textarea
-                rows={3}
-                style={{ width: '100%', fontFamily: 'monospace' }}
-                placeholder="Why did you choose this layout or structure?"
-                value={formData.reasoning.decisions}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    reasoning: { ...formData.reasoning, decisions: e.target.value },
-                  })
-                }
-              />
-            </div>
-            <div style={{ marginBottom: '10px' }}>
-              <label style={{ display: 'block', fontWeight: 'bold' }}>Design Patterns Used:</label>
-              <textarea
-                rows={3}
-                style={{ width: '100%', fontFamily: 'monospace' }}
-                placeholder="Patterns applied (e.g. Strategy, Factory, Observer) and why..."
-                value={formData.reasoning.patterns}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    reasoning: { ...formData.reasoning, patterns: e.target.value },
-                  })
-                }
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontWeight: 'bold' }}>Trade-offs & Alternatives Considered:</label>
-              <textarea
-                rows={3}
-                style={{ width: '100%', fontFamily: 'monospace' }}
-                placeholder="What compromises were made and what alternatives were rejected?"
-                value={formData.reasoning.tradeoffs}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    reasoning: { ...formData.reasoning, tradeoffs: e.target.value },
-                  })
-                }
-              />
-            </div>
-          </fieldset>
-
-          <fieldset style={{ margin: '16px 0', padding: '12px' }}>
-            <legend><strong>4. Edge Cases & Concurrency</strong></legend>
-            <textarea
-              rows={4}
-              style={{ width: '100%', fontFamily: 'monospace' }}
-              placeholder="Edge cases identified and how the design safely handles them..."
-              value={formData.edgeCases}
-              onChange={(e) => setFormData({ ...formData, edgeCases: e.target.value })}
-            />
-          </fieldset>
-
-          <div style={{ marginTop: '20px' }}>
-            <button
-              type="submit"
-              disabled={submitting}
-              style={{
-                padding: '10px 24px',
-                fontSize: '15px',
-                fontWeight: 'bold',
-                cursor: submitting ? 'not-allowed' : 'pointer',
-              }}
-            >
-              {submitting ? 'Submitting Solution...' : 'Submit Solution'}
-            </button>
-          </div>
-        </form>
-      )}
+      <LandingFooter />
     </div>
   );
 };
