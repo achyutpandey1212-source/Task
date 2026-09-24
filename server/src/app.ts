@@ -12,10 +12,28 @@ import { NotFoundError } from './shared/errors/AppError.js';
 export function createApp(): Application {
   const app = express();
 
+  const allowedOrigins = env.CLIENT_URL.split(',')
+    .map((url) => url.trim().replace(/\/+$/, ''))
+    .filter(Boolean);
+
   // CORS configuration
   app.use(
     cors({
-      origin: env.CLIENT_URL,
+      origin: (origin, callback) => {
+        // Allow requests with no origin (like mobile apps, curl, or server-to-server)
+        if (!origin) return callback(null, true);
+
+        const cleanOrigin = origin.replace(/\/+$/, '');
+        const isAllowed =
+          allowedOrigins.includes(cleanOrigin) ||
+          cleanOrigin.endsWith('.vercel.app') ||
+          env.NODE_ENV === 'development';
+
+        if (isAllowed) {
+          return callback(null, true);
+        }
+        return callback(new Error(`Not allowed by CORS: ${origin}`));
+      },
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
       allowedHeaders: ['Content-Type', 'Authorization'],
