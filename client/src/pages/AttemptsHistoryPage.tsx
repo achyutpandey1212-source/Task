@@ -27,7 +27,7 @@ export const AttemptsHistoryPage: React.FC = () => {
     <div style={{ fontFamily: 'monospace', padding: '24px', maxWidth: '800px', margin: '0 auto' }}>
       <h1>My Attempt History</h1>
       <p>
-        <Link to="/">← Back to Status</Link> | <Link to="/problems">Browse Problems</Link>
+        <Link to="/">← Back to Home</Link> | <Link to="/problems">Browse Problems</Link> | <Link to="/settings">Settings</Link>
       </p>
       <hr />
 

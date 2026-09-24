@@ -45,7 +45,7 @@ export const LoginPage: React.FC = () => {
   return (
     <div style={{ fontFamily: 'monospace', padding: '24px', maxWidth: '600px', margin: '0 auto' }}>
       <h1>{isRegister ? 'Test Sign Up' : 'Test Sign In'}</h1>
-      <p><a href="/">← Back to System Status</a></p>
+      <p><a href="/">← Back to Home</a></p>
       <hr />
 
       <form onSubmit={handleSubmit} style={{ margin: '20px 0' }}>

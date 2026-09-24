@@ -27,7 +27,7 @@ export const ProblemsPage: React.FC = () => {
     <div style={{ fontFamily: 'monospace', padding: '24px', maxWidth: '800px', margin: '0 auto' }}>
       <h1>Low-Level Design (LLD) Problems</h1>
       <p>
-        <Link to="/">← Back to Status</Link> | <Link to="/attempts">My Attempts History</Link>
+        <Link to="/">← Back to Home</Link> | <Link to="/how-it-works">How It Works</Link> | <Link to="/attempts">My Attempts History</Link>
       </p>
       <hr />
 
