@@ -7,10 +7,11 @@ import { TornPaper } from '../components/landing/TornPaper';
 import { Tape, PushPin } from '../components/landing/TactileAccents';
 import { SketchStar } from '../components/landing/HandDrawnDoodles';
 
-export const LoginPage: React.FC = () => {
+export const RegisterPage: React.FC = () => {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -23,13 +24,13 @@ export const LoginPage: React.FC = () => {
     setError(null);
 
     try {
-      await authService.login(email.trim(), password);
+      await authService.register(email.trim(), password, name.trim() || undefined);
       navigate('/problems');
     } catch (err: any) {
       const msg =
         err?.response?.data?.error?.message ||
         err?.response?.data?.message ||
-        "Couldn't sign you in. Check your email and password and try again.";
+        "Couldn't set up your notebook. Please check your information and try again.";
       setError(msg);
       setLoading(false);
     }
@@ -76,15 +77,15 @@ export const LoginPage: React.FC = () => {
                 transform: 'rotate(-1.5deg)',
               }}
             >
-              good to see you again →
+              everyone starts somewhere →
             </span>
             <SketchStar size={22} />
           </div>
 
-          {/* Login Card Paper Sheet */}
+          {/* Registration Card Paper Sheet */}
           <TornPaper
             color="white"
-            rotation={-0.4}
+            rotation={0.4}
             tornEdges="both"
             style={{
               padding: 'clamp(28px, 5vw, 44px) clamp(20px, 4vw, 36px)',
@@ -93,8 +94,8 @@ export const LoginPage: React.FC = () => {
               position: 'relative',
             }}
           >
-            <Tape rotation={-3} style={{ top: '-12px', left: '36px' }} />
-            <PushPin color="#FEDE8C" style={{ top: '16px', right: '20px' }} />
+            <Tape rotation={3} style={{ top: '-12px', right: '36px' }} />
+            <PushPin color="#D5BDFF" style={{ top: '16px', left: '20px' }} />
 
             {/* Label & Header */}
             <div style={{ marginBottom: '24px', borderBottom: '2px solid #000000', paddingBottom: '16px' }}>
@@ -110,7 +111,7 @@ export const LoginPage: React.FC = () => {
                   marginBottom: '8px',
                 }}
               >
-                AUTH / 01
+                AUTH / 02
               </div>
               <h1
                 style={{
@@ -121,10 +122,10 @@ export const LoginPage: React.FC = () => {
                   letterSpacing: '-0.02em',
                 }}
               >
-                WELCOME BACK.
+                START YOUR NOTEBOOK.
               </h1>
               <p style={{ margin: 0, fontSize: '14px', color: '#555555' }}>
-                Continue designing systems.
+                Practice designing systems. Learn from trade-offs. Try again.
               </p>
             </div>
 
@@ -142,7 +143,7 @@ export const LoginPage: React.FC = () => {
                   fontFamily: "'JetBrains Mono', monospace",
                 }}
               >
-                <strong>COULDN'T SIGN YOU IN:</strong> {error}
+                <strong>REGISTRATION ERROR:</strong> {error}
               </div>
             )}
 
@@ -150,7 +151,42 @@ export const LoginPage: React.FC = () => {
             <form onSubmit={handleSubmit}>
               <div style={{ marginBottom: '18px' }}>
                 <label
-                  htmlFor="login-email"
+                  htmlFor="register-name"
+                  style={{
+                    display: 'block',
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: '12px',
+                    fontWeight: 800,
+                    textTransform: 'uppercase',
+                    marginBottom: '6px',
+                    color: '#000000',
+                  }}
+                >
+                  Name (Optional)
+                </label>
+                <input
+                  id="register-name"
+                  type="text"
+                  autoComplete="name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    fontSize: '14px',
+                    fontFamily: "'JetBrains Mono', monospace",
+                    border: '1.5px solid #000000',
+                    backgroundColor: '#F8FAFC',
+                    color: '#000000',
+                    borderRadius: '2px',
+                  }}
+                  placeholder="Ada Lovelace"
+                />
+              </div>
+
+              <div style={{ marginBottom: '18px' }}>
+                <label
+                  htmlFor="register-email"
                   style={{
                     display: 'block',
                     fontFamily: "'JetBrains Mono', monospace",
@@ -164,7 +200,7 @@ export const LoginPage: React.FC = () => {
                   Email Address
                 </label>
                 <input
-                  id="login-email"
+                  id="register-email"
                   type="email"
                   required
                   autoComplete="email"
@@ -186,7 +222,7 @@ export const LoginPage: React.FC = () => {
 
               <div style={{ marginBottom: '24px' }}>
                 <label
-                  htmlFor="login-password"
+                  htmlFor="register-password"
                   style={{
                     display: 'block',
                     fontFamily: "'JetBrains Mono', monospace",
@@ -197,13 +233,14 @@ export const LoginPage: React.FC = () => {
                     color: '#000000',
                   }}
                 >
-                  Password
+                  Password (Minimum 6 Characters)
                 </label>
                 <input
-                  id="login-password"
+                  id="register-password"
                   type="password"
                   required
-                  autoComplete="current-password"
+                  minLength={6}
+                  autoComplete="new-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   style={{
@@ -238,7 +275,7 @@ export const LoginPage: React.FC = () => {
                   transition: 'transform 0.1s ease',
                 }}
               >
-                {loading ? 'ENTERING NOTEBOOK...' : 'ENTER THE NOTEBOOK →'}
+                {loading ? 'SETTING UP YOUR NOTEBOOK...' : 'CREATE NOTEBOOK →'}
               </button>
 
               <div
@@ -250,9 +287,9 @@ export const LoginPage: React.FC = () => {
                   paddingTop: '16px',
                 }}
               >
-                <span>Don't have an account? </span>
+                <span>Already have an account? </span>
                 <Link
-                  to="/register"
+                  to="/login"
                   style={{
                     color: '#000000',
                     fontWeight: 800,
@@ -260,7 +297,7 @@ export const LoginPage: React.FC = () => {
                     textUnderlineOffset: '3px',
                   }}
                 >
-                  Create one →
+                  Enter the notebook →
                 </Link>
               </div>
             </form>
