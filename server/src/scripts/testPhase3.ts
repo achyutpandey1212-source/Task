@@ -170,15 +170,17 @@ async function runPhase3Tests() {
     const evalResult = await fakeEvaluator.evaluate(problem, mockSubmission);
     assert(evalResult.overallScore === 7.4, `Deterministic overallScore calculation is exact (7.4), got ${evalResult.overallScore}`);
 
-    // 3. GeminiProvider Multi-Model Fallback Test (3.8 -> 3.7 -> 3.6)
-    const geminiMultiModel = new GeminiProvider('fake-key', ['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash']);
+    // 3. GeminiProvider Multi-Model Fallback Test (3.8 -> 3.7 -> 3.6 -> 3.5-lite -> 3.1-lite)
+    const geminiMultiModel = new GeminiProvider('fake-key');
     assert(geminiMultiModel.models[0] === 'gemini-3.8-flash', 'GeminiProvider primary model is gemini-3.8-flash');
     assert(geminiMultiModel.models[1] === 'gemini-3.7-flash', 'GeminiProvider first fallback is gemini-3.7-flash');
     assert(geminiMultiModel.models[2] === 'gemini-3.6-flash', 'GeminiProvider second fallback is gemini-3.6-flash');
+    assert(geminiMultiModel.models[3] === 'gemini-3.5-flash-lite', 'GeminiProvider third fallback is gemini-3.5-flash-lite');
+    assert(geminiMultiModel.models[4] === 'gemini-3.1-flash-lite', 'GeminiProvider fourth fallback is gemini-3.1-flash-lite');
 
     // 4. Provider Fallback Test: Primary Gemini fails -> Fallback Groq succeeds
     const fallbackEvaluator = new AIEvaluator([
-      new FakeFailingAIProvider('gemini (gemini-3.8-flash -> gemini-3.7-flash -> gemini-3.6-flash)'),
+      new FakeFailingAIProvider('gemini (gemini-3.8-flash -> gemini-3.7-flash -> gemini-3.6-flash -> gemini-3.5-flash-lite -> gemini-3.1-flash-lite)'),
       new FakeSuccessAIProvider(),
     ]);
     const fallbackResult = await fallbackEvaluator.evaluate(problem, mockSubmission);
@@ -186,8 +188,8 @@ async function runPhase3Tests() {
 
     // 5. Provider Total Failure Test: All Gemini models and Groq fail -> throws ServiceUnavailableError
     const allFailingEvaluator = new AIEvaluator([
-      new FakeFailingAIProvider('gemini (gemini-3.8-flash -> gemini-3.7-flash -> gemini-3.6-flash)'),
-      new FakeFailingAIProvider('groq (llama-3.3-70b-versatile)'),
+      new FakeFailingAIProvider('gemini (gemini-3.8-flash -> gemini-3.7-flash -> gemini-3.6-flash -> gemini-3.5-flash-lite -> gemini-3.1-flash-lite)'),
+      new FakeFailingAIProvider('groq'),
     ]);
     let allFailedCaught = false;
     try {
