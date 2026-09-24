@@ -3,7 +3,11 @@ import { Link } from 'react-router-dom';
 import { authService } from '../../services/authService';
 import { User } from '../../types';
 
-export const LandingNavbar: React.FC = () => {
+interface LandingNavbarProps {
+  activePage?: 'landing' | 'how-it-works' | 'problems' | 'attempts' | 'settings' | 'login';
+}
+
+export const LandingNavbar: React.FC<LandingNavbarProps> = ({ activePage }) => {
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
@@ -80,10 +84,11 @@ export const LandingNavbar: React.FC = () => {
           <Link
             to="/how-it-works"
             style={{
-              color: '#333333',
+              color: activePage === 'how-it-works' ? '#000000' : '#444444',
               fontSize: '14px',
-              fontWeight: 600,
-              textDecoration: 'none',
+              fontWeight: activePage === 'how-it-works' ? 800 : 600,
+              textDecoration: activePage === 'how-it-works' ? 'underline' : 'none',
+              textUnderlineOffset: '4px',
             }}
           >
             How It Works
@@ -91,10 +96,11 @@ export const LandingNavbar: React.FC = () => {
           <Link
             to="/problems"
             style={{
-              color: '#333333',
+              color: activePage === 'problems' ? '#000000' : '#444444',
               fontSize: '14px',
-              fontWeight: 600,
-              textDecoration: 'none',
+              fontWeight: activePage === 'problems' ? 800 : 600,
+              textDecoration: activePage === 'problems' ? 'underline' : 'none',
+              textUnderlineOffset: '4px',
             }}
           >
             Problems
@@ -105,10 +111,11 @@ export const LandingNavbar: React.FC = () => {
               <Link
                 to="/attempts"
                 style={{
-                  color: '#333333',
+                  color: activePage === 'attempts' ? '#000000' : '#444444',
                   fontSize: '14px',
-                  fontWeight: 600,
-                  textDecoration: 'none',
+                  fontWeight: activePage === 'attempts' ? 800 : 600,
+                  textDecoration: activePage === 'attempts' ? 'underline' : 'none',
+                  textUnderlineOffset: '4px',
                 }}
               >
                 My Attempts
@@ -116,10 +123,11 @@ export const LandingNavbar: React.FC = () => {
               <Link
                 to="/settings"
                 style={{
-                  color: '#333333',
+                  color: activePage === 'settings' ? '#000000' : '#444444',
                   fontSize: '14px',
-                  fontWeight: 600,
-                  textDecoration: 'none',
+                  fontWeight: activePage === 'settings' ? 800 : 600,
+                  textDecoration: activePage === 'settings' ? 'underline' : 'none',
+                  textUnderlineOffset: '4px',
                 }}
               >
                 Settings
