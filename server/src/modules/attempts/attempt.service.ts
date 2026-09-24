@@ -1,6 +1,8 @@
 import mongoose from 'mongoose';
 import { AttemptModel, IAttempt } from './attempt.model.js';
 import { SubmissionModel, ISubmission } from '../submissions/submission.model.js';
+import { EvaluationModel, IEvaluation } from '../evaluations/evaluation.model.js';
+import { evaluationService } from '../evaluations/evaluation.service.js';
 import { problemService } from '../problems/problem.service.js';
 import {
   BadRequestError,
@@ -33,7 +35,7 @@ export class AttemptService {
   async getAttemptById(
     attemptId: string,
     userId: string
-  ): Promise<{ attempt: IAttempt; submission: ISubmission | null }> {
+  ): Promise<{ attempt: IAttempt; submission: ISubmission | null; evaluation: IEvaluation | null }> {
     if (!mongoose.Types.ObjectId.isValid(attemptId)) {
       throw new BadRequestError('Invalid attempt ID format');
     }
@@ -52,18 +54,21 @@ export class AttemptService {
     }
 
     let submission: ISubmission | null = null;
+    let evaluation: IEvaluation | null = null;
+
     if (attempt.submissionId) {
       submission = await SubmissionModel.findById(attempt.submissionId);
+      evaluation = await EvaluationModel.findOne({ submissionId: attempt.submissionId });
     }
 
-    return { attempt, submission };
+    return { attempt, submission, evaluation };
   }
 
   async submitAttempt(
     attemptId: string,
     userId: string,
     input: SubmitSolutionInput
-  ): Promise<{ attemptId: string; submissionId: string; status: string }> {
+  ): Promise<{ attemptId: string; submissionId: string; evaluationId: string; status: string }> {
     if (!mongoose.Types.ObjectId.isValid(attemptId)) {
       throw new BadRequestError('Invalid attempt ID format');
     }
@@ -93,7 +98,7 @@ export class AttemptService {
       throw new ConflictError('A submission already exists for this attempt.');
     }
 
-    // 1. Create and persist submission
+    // 1. Create and persist submission (GUARANTEED PERSISTENCE BEFORE AI)
     const submission = await SubmissionModel.create({
       attemptId: attempt._id,
       userId: new mongoose.Types.ObjectId(userId),
@@ -111,10 +116,17 @@ export class AttemptService {
     attempt.submittedAt = new Date();
     await attempt.save();
 
+    // 3. Initiate Evaluation lifecycle (transitions attempt to EVALUATING)
+    const evaluation = await evaluationService.createEvaluation(
+      submission._id.toString(),
+      userId
+    );
+
     return {
       attemptId: attempt._id.toString(),
       submissionId: submission._id.toString(),
-      status: attempt.status,
+      evaluationId: evaluation._id.toString(),
+      status: 'EVALUATING',
     };
   }
 }

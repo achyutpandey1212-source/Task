@@ -1,19 +1,23 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { attemptService } from '../services/attemptService';
-import { Attempt, Submission, Problem, SubmitSolutionPayload } from '../types';
+import { evaluationService } from '../services/evaluationService';
+import { Attempt, Submission, Evaluation, Problem, SubmitSolutionPayload } from '../types';
 
 export const AttemptWorkspacePage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
 
   const [attempt, setAttempt] = useState<Attempt | null>(null);
   const [submission, setSubmission] = useState<Submission | null>(null);
+  const [evaluation, setEvaluation] = useState<Evaluation | null>(null);
   const [problem, setProblem] = useState<Problem | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  const pollingRef = useRef<number | null>(null);
 
   // Form state
   const [formData, setFormData] = useState<SubmitSolutionPayload>({
@@ -23,6 +27,33 @@ export const AttemptWorkspacePage: React.FC = () => {
     edgeCases: '',
   });
 
+  const stopPolling = () => {
+    if (pollingRef.current !== null) {
+      window.clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+  };
+
+  const startPolling = (evalId: string) => {
+    stopPolling();
+    pollingRef.current = window.setInterval(async () => {
+      try {
+        const ev = await evaluationService.getById(evalId);
+        setEvaluation(ev);
+        if (ev.status === 'COMPLETED' || ev.status === 'FAILED') {
+          stopPolling();
+          // Update attempt state to reflect terminal status
+          if (id) {
+            const data = await attemptService.getById(id);
+            setAttempt(data.attempt);
+          }
+        }
+      } catch (err) {
+        console.error('Polling error:', err);
+      }
+    }, 2500);
+  };
+
   const fetchAttemptData = async () => {
     if (!id) return;
     try {
@@ -31,8 +62,18 @@ export const AttemptWorkspacePage: React.FC = () => {
       const data = await attemptService.getById(id);
       setAttempt(data.attempt);
       setSubmission(data.submission);
+      setEvaluation(data.evaluation);
+
       if (typeof data.attempt.problemId === 'object' && data.attempt.problemId !== null) {
         setProblem(data.attempt.problemId as Problem);
+      }
+
+      // If attempt is EVALUATING or evaluation is PENDING, initiate polling
+      if (
+        data.evaluation &&
+        (data.evaluation.status === 'PENDING' || data.attempt.status === 'EVALUATING')
+      ) {
+        startPolling(data.evaluation.id);
       }
     } catch (err: any) {
       setError(err?.response?.data?.error?.message || err.message || 'Failed to load attempt');
@@ -43,6 +84,9 @@ export const AttemptWorkspacePage: React.FC = () => {
 
   useEffect(() => {
     fetchAttemptData();
+    return () => {
+      stopPolling();
+    };
   }, [id]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -59,9 +103,15 @@ export const AttemptWorkspacePage: React.FC = () => {
       setError(null);
       setSuccessMessage(null);
 
-      await attemptService.submit(id, formData);
-      setSuccessMessage('Submission saved successfully. Status: SUBMITTED');
-      // Refresh attempt data to reflect submitted state
+      const result = await attemptService.submit(id, formData);
+      setSuccessMessage('Submission saved successfully. Evaluation initiated.');
+
+      // Start polling with returned evaluationId
+      if (result.evaluationId) {
+        startPolling(result.evaluationId);
+      }
+
+      // Refresh attempt data to reflect submitted / evaluating state
       await fetchAttemptData();
     } catch (err: any) {
       setError(err?.response?.data?.error?.message || err.message || 'Submission failed');
@@ -87,7 +137,33 @@ export const AttemptWorkspacePage: React.FC = () => {
     );
   }
 
-  const isSubmitted = attempt?.status === 'SUBMITTED';
+  const isDraft = attempt?.status === 'DRAFT';
+  const isEvaluating = attempt?.status === 'EVALUATING' || evaluation?.status === 'PENDING';
+  const isCompleted = attempt?.status === 'COMPLETED' || evaluation?.status === 'COMPLETED';
+  const isFailed = attempt?.status === 'FAILED' || evaluation?.status === 'FAILED';
+
+  const formatCriterionName = (key: string) => {
+    return key
+      .split('_')
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ');
+  };
+
+  const getStatusBadgeColor = (status?: string) => {
+    switch (status) {
+      case 'COMPLETED':
+        return { border: 'green', color: 'green' };
+      case 'EVALUATING':
+      case 'PENDING':
+        return { border: 'blue', color: 'blue' };
+      case 'FAILED':
+        return { border: 'red', color: 'red' };
+      default:
+        return { border: 'orange', color: '#b25900' };
+    }
+  };
+
+  const statusColors = getStatusBadgeColor(attempt?.status);
 
   return (
     <div style={{ fontFamily: 'monospace', padding: '24px', maxWidth: '900px', margin: '0 auto' }}>
@@ -110,8 +186,8 @@ export const AttemptWorkspacePage: React.FC = () => {
               padding: '6px 12px',
               fontWeight: 'bold',
               border: '2px solid',
-              borderColor: isSubmitted ? 'green' : 'orange',
-              color: isSubmitted ? 'green' : '#b25900',
+              borderColor: statusColors.border,
+              color: statusColors.color,
             }}
           >
             STATUS: {attempt?.status}
@@ -131,7 +207,7 @@ export const AttemptWorkspacePage: React.FC = () => {
         </div>
       )}
 
-      {/* Visible problem context banner */}
+      {/* Problem context collapsible banner */}
       {problem && (
         <details style={{ margin: '16px 0', padding: '12px', border: '1px solid #aaa', background: '#f9f9f9' }}>
           <summary style={{ cursor: 'pointer', fontWeight: 'bold' }}>
@@ -159,10 +235,136 @@ export const AttemptWorkspacePage: React.FC = () => {
         </details>
       )}
 
-      {/* View Mode: SUBMITTED attempt */}
-      {isSubmitted && submission ? (
+      {/* EVALUATION PROGRESS BANNER */}
+      {isEvaluating && (
+        <div
+          style={{
+            margin: '20px 0',
+            padding: '16px',
+            border: '2px solid blue',
+            background: '#f0f4ff',
+          }}
+        >
+          <h3 style={{ margin: '0 0 8px 0', color: 'blue' }}>
+            Evaluation in Progress...
+          </h3>
+          <p style={{ margin: '4px 0' }}>
+            Your solution is safely saved in MongoDB. The AI evaluator is assessing your low-level design against the rubric.
+          </p>
+          <p style={{ margin: '4px 0', fontSize: '12px', color: '#555' }}>
+            Polling updates every 2.5 seconds. Please wait...
+          </p>
+        </div>
+      )}
+
+      {/* EVALUATION FAILED BANNER */}
+      {isFailed && (
+        <div
+          style={{
+            margin: '20px 0',
+            padding: '16px',
+            border: '2px solid red',
+            background: '#fff0f0',
+          }}
+        >
+          <h3 style={{ margin: '0 0 8px 0', color: 'red' }}>
+            Evaluation Failed
+          </h3>
+          <p style={{ margin: '4px 0' }}>
+            Evaluation could not be completed at this time ({evaluation?.errorMessage || 'AI provider unavailable'}).
+          </p>
+          <p style={{ margin: '4px 0', fontWeight: 'bold' }}>
+            Your submitted solution is completely preserved below.
+          </p>
+        </div>
+      )}
+
+      {/* COMPLETED EVALUATION RESULTS */}
+      {isCompleted && evaluation && (
+        <div
+          style={{
+            margin: '20px 0',
+            padding: '20px',
+            border: '2px solid green',
+            background: '#f8fff8',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h2 style={{ margin: 0, color: 'green' }}>Structured Feedback</h2>
+            <div style={{ fontSize: '24px', fontWeight: 'bold', color: 'green' }}>
+              Overall Score: {evaluation.overallScore ?? 'N/A'} / 10
+            </div>
+          </div>
+
+          {evaluation.summary && (
+            <div style={{ margin: '16px 0', padding: '12px', background: '#fff', border: '1px solid #ddd' }}>
+              <strong>Executive Summary:</strong>
+              <p style={{ margin: '6px 0 0 0' }}>{evaluation.summary}</p>
+            </div>
+          )}
+
+          <h3 style={{ marginTop: '24px' }}>Rubric Criteria Analysis (7 Dimensions)</h3>
+
+          {evaluation.criteria.map((c, idx) => (
+            <div
+              key={idx}
+              style={{
+                margin: '16px 0',
+                padding: '16px',
+                border: '1px solid #ccc',
+                background: '#fff',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h4 style={{ margin: 0 }}>
+                  {idx + 1}. {formatCriterionName(c.criterion)}
+                </h4>
+                <div style={{ fontWeight: 'bold', fontSize: '16px' }}>
+                  Score: {c.score} / 10
+                  <span
+                    style={{
+                      marginLeft: '12px',
+                      fontSize: '12px',
+                      color: '#666',
+                      fontWeight: 'normal',
+                    }}
+                  >
+                    (Confidence: {Math.round(c.confidence * 100)}%)
+                  </span>
+                </div>
+              </div>
+
+              <div style={{ marginTop: '12px' }}>
+                <p style={{ margin: '6px 0' }}>
+                  <strong>Evidence (from your design):</strong>
+                </p>
+                <div style={{ background: '#f5f5f5', padding: '8px', borderLeft: '3px solid #666' }}>
+                  {c.evidence}
+                </div>
+
+                <p style={{ margin: '10px 0 4px 0' }}>
+                  <strong>Concern / Gap:</strong>
+                </p>
+                <div style={{ background: '#fff9e6', padding: '8px', borderLeft: '3px solid #f0ad4e' }}>
+                  {c.concern}
+                </div>
+
+                <p style={{ margin: '10px 0 4px 0' }}>
+                  <strong>Actionable Suggestion:</strong>
+                </p>
+                <div style={{ background: '#eef9ff', padding: '8px', borderLeft: '3px solid #5bc0de' }}>
+                  {c.suggestion}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Submitted immutable solution display */}
+      {!isDraft && submission && (
         <div style={{ marginTop: '20px', border: '1px solid #ccc', padding: '16px' }}>
-          <h3>Immutable Submitted Solution (Version {submission.version})</h3>
+          <h3>Preserved Submitted Solution (Version {submission.version})</h3>
           <p style={{ color: '#666', fontSize: '12px' }}>
             Submitted at: {new Date(submission.createdAt).toLocaleString()}
           </p>
@@ -217,20 +419,15 @@ export const AttemptWorkspacePage: React.FC = () => {
               {submission.edgeCases || '(none)'}
             </pre>
           </section>
-
-          <div style={{ marginTop: '24px', padding: '12px', border: '1px dashed #666', background: '#fafafa' }}>
-            <strong>Evaluation Status:</strong>
-            <p style={{ margin: '6px 0 0 0', color: '#666' }}>
-              AI evaluation engine will be connected in Phase 3.
-            </p>
-          </div>
         </div>
-      ) : (
-        /* Edit Mode: DRAFT attempt */
+      )}
+
+      {/* DRAFT attempt: Interactive solution submission form */}
+      {isDraft && (
         <form onSubmit={handleSubmit} style={{ marginTop: '20px' }}>
           <h3>Structured LLD Solution Workspace (Draft)</h3>
           <p style={{ color: '#555', fontSize: '13px' }}>
-            Fill in your structured design below and click Submit when ready.
+            Fill in your structured design below and click Submit to start AI evaluation.
           </p>
 
           <fieldset style={{ margin: '16px 0', padding: '12px' }}>

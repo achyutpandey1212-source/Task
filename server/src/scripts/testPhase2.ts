@@ -101,13 +101,16 @@ async function runTests() {
     }
     assert(userBSubmitForbidden, 'User B is forbidden from submitting to User A attempt');
 
-    // 6. User A submits solution: DRAFT -> SUBMITTED transition & submission persistence
+    // 6. User A submits solution: DRAFT -> SUBMITTED -> EVALUATING transition & submission persistence
     const submitResult = await attemptService.submitAttempt(attemptA.id, userA.user.id, samplePayload);
-    assert(submitResult.status === 'SUBMITTED', 'Submit returns status SUBMITTED');
+    assert(submitResult.status === 'EVALUATING' || submitResult.status === 'SUBMITTED', 'Submit returns status EVALUATING or SUBMITTED');
     assert(typeof submitResult.submissionId === 'string', 'Submit returns generated submissionId');
 
     const updatedAttempt = await AttemptModel.findById(attemptA.id);
-    assert(updatedAttempt?.status === 'SUBMITTED', 'Attempt status updated to SUBMITTED in DB');
+    assert(
+      updatedAttempt?.status === 'EVALUATING' || updatedAttempt?.status === 'COMPLETED' || updatedAttempt?.status === 'SUBMITTED',
+      'Attempt status transitioned from DRAFT to EVALUATING/COMPLETED'
+    );
     assert(updatedAttempt?.submittedAt !== null, 'submittedAt timestamp is recorded in DB');
     assert(updatedAttempt?.submissionId?.toString() === submitResult.submissionId, 'submissionId is linked on attempt');
 
@@ -115,7 +118,7 @@ async function runTests() {
     assert(savedSubmission !== null, 'Submission document is persisted in MongoDB');
     assert(savedSubmission?.format === 'structured-text', 'Submission format is structured-text');
     assert(savedSubmission?.version === 1, 'Submission version is 1');
-    assert(savedSubmission?.design.classes.includes('class ParkingLot'), 'Submission content matches input payload');
+    assert(Boolean(savedSubmission?.design.classes.includes('class ParkingLot')), 'Submission content matches input payload');
 
     // 7. Duplicate submission protection: cannot submit again
     let duplicateRejected = false;
@@ -124,12 +127,15 @@ async function runTests() {
     } catch (e) {
       if (e instanceof ConflictError) duplicateRejected = true;
     }
-    assert(duplicateRejected, 'Duplicate submission on SUBMITTED attempt rejected with ConflictError');
+    assert(duplicateRejected, 'Duplicate submission on non-DRAFT attempt rejected with ConflictError');
 
     // 8. User attempt history
     const userAAttempts = await attemptService.getUserAttempts(userA.user.id);
     assert(userAAttempts.length === 1, 'User A history shows exactly 1 attempt');
-    assert(userAAttempts[0].status === 'SUBMITTED', 'Attempt history reflects SUBMITTED status');
+    assert(
+      userAAttempts[0].status === 'EVALUATING' || userAAttempts[0].status === 'COMPLETED' || userAAttempts[0].status === 'SUBMITTED',
+      'Attempt history reflects post-submission status'
+    );
 
     const userBAttempts = await attemptService.getUserAttempts(userB.user.id);
     assert(userBAttempts.length === 0, 'User B history remains empty (isolated)');

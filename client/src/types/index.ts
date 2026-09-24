@@ -82,3 +82,36 @@ export interface SubmitSolutionPayload {
   reasoning: SubmissionReasoning;
   edgeCases: string;
 }
+
+export type CriterionType =
+  | 'requirement_understanding'
+  | 'responsibilities'
+  | 'coupling_cohesion'
+  | 'abstraction_interfaces'
+  | 'extensibility'
+  | 'edge_cases_testability'
+  | 'reasoning';
+
+export interface EvaluationCriterion {
+  criterion: CriterionType;
+  score: number;
+  evidence: string;
+  concern: string;
+  suggestion: string;
+  confidence: number;
+}
+
+export type EvaluationStatus = 'PENDING' | 'COMPLETED' | 'FAILED';
+
+export interface Evaluation {
+  id: string;
+  submissionId: string;
+  attemptId: string;
+  status: EvaluationStatus;
+  overallScore?: number | null;
+  criteria: EvaluationCriterion[];
+  summary?: string | null;
+  errorMessage?: string | null;
+  createdAt: string;
+  completedAt?: string | null;
+}
