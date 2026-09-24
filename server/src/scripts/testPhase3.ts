@@ -10,6 +10,7 @@ import { EvaluationModel } from '../modules/evaluations/evaluation.model.js';
 import { EvaluationService } from '../modules/evaluations/evaluation.service.js';
 import { AIEvaluator } from '../services/evaluator/aiEvaluator.js';
 import { AIProvider, EvaluationContext, AIResponse } from '../services/ai/aiProvider.js';
+import { GeminiProvider } from '../services/ai/geminiProvider.js';
 import { parseAndValidateAIResponse } from '../services/ai/parseAIResponse.js';
 import { AIEvaluationOutput } from '../modules/evaluations/evaluation.schema.js';
 import { ConflictError, ForbiddenError, ValidationError, ServiceUnavailableError } from '../shared/errors/AppError.js';
@@ -169,18 +170,24 @@ async function runPhase3Tests() {
     const evalResult = await fakeEvaluator.evaluate(problem, mockSubmission);
     assert(evalResult.overallScore === 7.4, `Deterministic overallScore calculation is exact (7.4), got ${evalResult.overallScore}`);
 
-    // 3. Provider Fallback Test: Primary fails -> Fallback succeeds
+    // 3. GeminiProvider Multi-Model Fallback Test (3.8 -> 3.7 -> 3.6)
+    const geminiMultiModel = new GeminiProvider('fake-key', ['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash']);
+    assert(geminiMultiModel.models[0] === 'gemini-3.8-flash', 'GeminiProvider primary model is gemini-3.8-flash');
+    assert(geminiMultiModel.models[1] === 'gemini-3.7-flash', 'GeminiProvider first fallback is gemini-3.7-flash');
+    assert(geminiMultiModel.models[2] === 'gemini-3.6-flash', 'GeminiProvider second fallback is gemini-3.6-flash');
+
+    // 4. Provider Fallback Test: Primary Gemini fails -> Fallback Groq succeeds
     const fallbackEvaluator = new AIEvaluator([
-      new FakeFailingAIProvider('primary-gemini'),
+      new FakeFailingAIProvider('gemini (gemini-3.8-flash -> gemini-3.7-flash -> gemini-3.6-flash)'),
       new FakeSuccessAIProvider(),
     ]);
     const fallbackResult = await fallbackEvaluator.evaluate(problem, mockSubmission);
-    assert(fallbackResult.overallScore === 7.4, 'Provider fallback succeeds when primary fails');
+    assert(fallbackResult.overallScore === 7.4, 'Provider fallback succeeds when all Gemini models fail and cascades to Groq');
 
-    // 4. Provider Total Failure Test: Both fail -> throws ServiceUnavailableError
+    // 5. Provider Total Failure Test: All Gemini models and Groq fail -> throws ServiceUnavailableError
     const allFailingEvaluator = new AIEvaluator([
-      new FakeFailingAIProvider('gemini'),
-      new FakeFailingAIProvider('groq'),
+      new FakeFailingAIProvider('gemini (gemini-3.8-flash -> gemini-3.7-flash -> gemini-3.6-flash)'),
+      new FakeFailingAIProvider('groq (llama-3.3-70b-versatile)'),
     ]);
     let allFailedCaught = false;
     try {
@@ -188,9 +195,9 @@ async function runPhase3Tests() {
     } catch (e) {
       if (e instanceof ServiceUnavailableError) allFailedCaught = true;
     }
-    assert(allFailedCaught, 'When both AI providers fail, ServiceUnavailableError is thrown');
+    assert(allFailedCaught, 'When both Gemini models and Groq fail, ServiceUnavailableError is thrown');
 
-    // 5. End-to-End Evaluation Lifecycle & Async Processing
+    // 6. End-to-End Evaluation Lifecycle & Async Processing
     const userA = await authService.register({
       email: `eval-user-a-${Date.now()}@test-suite.com`,
       password: 'password123',

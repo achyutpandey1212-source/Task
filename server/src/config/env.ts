@@ -12,6 +12,8 @@ const envSchema = z.object({
   CLIENT_URL: z.string().url('CLIENT_URL must be a valid URL').default('http://localhost:5173'),
   JWT_SECRET: z.string().min(16, 'JWT_SECRET must be at least 16 characters long'),
   GEMINI_API_KEY: z.string().optional(),
+  GEMINI_PRIMARY_MODEL: z.string().default('gemini-3.8-flash'),
+  GEMINI_FALLBACK_MODELS: z.string().default('gemini-3.7-flash,gemini-3.6-flash'),
   GROQ_API_KEY: z.string().optional(),
 });
 
