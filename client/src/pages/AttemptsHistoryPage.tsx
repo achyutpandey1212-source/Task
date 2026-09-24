@@ -322,19 +322,19 @@ export const AttemptsHistoryPage: React.FC = () => {
                       <Link
                         to={`/attempts/${att.id}`}
                         style={{
-                          backgroundColor: isDraft ? '#FFFFFF' : '#FEDE8C',
-                          color: '#000000',
-                          border: '2px solid #000000',
+                          backgroundColor: isDraft ? '#FFFFFF' : att.status === 'FAILED' ? '#FEF2F2' : '#FEDE8C',
+                          color: att.status === 'FAILED' ? '#991b1b' : '#000000',
+                          border: att.status === 'FAILED' ? '2px solid #b91c1c' : '2px solid #000000',
                           padding: '10px 20px',
                           fontFamily: "'JetBrains Mono', monospace",
                           fontSize: '13px',
                           fontWeight: 800,
                           textDecoration: 'none',
                           display: 'inline-block',
-                          boxShadow: '3px 3px 0px #000000',
+                          boxShadow: att.status === 'FAILED' ? '3px 3px 0px #b91c1c' : '3px 3px 0px #000000',
                         }}
                       >
-                        {isDraft ? 'CONTINUE DRAFT →' : 'REVIEW DESIGN →'}
+                        {isDraft ? 'CONTINUE DRAFT →' : att.status === 'FAILED' ? 'REVIEW / RETRY →' : 'REVIEW DESIGN →'}
                       </Link>
                     </div>
                   </article>

@@ -69,12 +69,17 @@ export class GeminiProvider implements AIProvider {
         },
       };
 
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+
       try {
         const response = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(requestBody),
+          signal: controller.signal,
         });
+        clearTimeout(timeoutId);
 
         if (!response.ok) {
           const errorText = await response.text();
@@ -107,6 +112,7 @@ export class GeminiProvider implements AIProvider {
           provider: 'gemini',
         };
       } catch (err: unknown) {
+        clearTimeout(timeoutId);
         lastError = err as Error;
         const errMsg = (err as Error).message || '';
         const shouldFallback = this.isEligibleForFallback(0, errMsg);

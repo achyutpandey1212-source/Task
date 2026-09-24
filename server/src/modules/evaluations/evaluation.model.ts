@@ -29,6 +29,10 @@ export interface IEvaluation extends Document {
   criteria: IEvaluationCriterion[];
   summary?: string;
   errorMessage?: string;
+  publicError?: {
+    code: 'EVALUATION_TEMPORARILY_UNAVAILABLE' | 'EVALUATION_FAILED';
+    message: string;
+  };
   createdAt: Date;
   completedAt?: Date;
   updatedAt: Date;
@@ -122,6 +126,15 @@ const EvaluationSchema = new Schema<IEvaluation>(
     errorMessage: {
       type: String,
       default: null,
+    },
+    publicError: {
+      code: {
+        type: String,
+        enum: ['EVALUATION_TEMPORARILY_UNAVAILABLE', 'EVALUATION_FAILED'],
+      },
+      message: {
+        type: String,
+      },
     },
     completedAt: {
       type: Date,

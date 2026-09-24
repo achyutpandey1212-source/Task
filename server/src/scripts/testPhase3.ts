@@ -306,7 +306,7 @@ async function runPhase3Tests() {
     );
 
     let evaluatedFailDoc: any = await EvaluationModel.findById(failEvaluation._id);
-    for (let i = 0; i < 20 && evaluatedFailDoc?.status === 'PENDING'; i++) {
+    for (let i = 0; i < 150 && evaluatedFailDoc?.status === 'PENDING'; i++) {
       await new Promise((resolve) => setTimeout(resolve, 100));
       evaluatedFailDoc = await EvaluationModel.findById(failEvaluation._id);
     }

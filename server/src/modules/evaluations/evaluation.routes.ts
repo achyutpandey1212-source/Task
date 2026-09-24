@@ -14,4 +14,10 @@ router.get(
   (req, res, next) => evaluationController.getById(req, res, next)
 );
 
+router.post(
+  '/:id/retry',
+  validateRequest({ params: evaluationIdParamSchema }),
+  (req, res, next) => evaluationController.retry(req, res, next)
+);
+
 export const evaluationRouter = router;

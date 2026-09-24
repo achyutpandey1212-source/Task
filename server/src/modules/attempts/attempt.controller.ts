@@ -36,6 +36,20 @@ export class AttemptController {
       }
 
       const result = await attemptService.getAttemptById(req.params.id as string, req.user.id);
+
+      // Sanitize evaluation error message for the public client
+      if (result.evaluation) {
+        const safeErrorMessage =
+          result.evaluation.publicError?.message ||
+          (result.evaluation.status === 'FAILED'
+            ? 'The evaluation service is temporarily unavailable. Your design is safe. Please try again.'
+            : undefined);
+
+        const evalObj = result.evaluation.toJSON();
+        evalObj.errorMessage = safeErrorMessage;
+        result.evaluation = evalObj as any;
+      }
+
       res.status(200).json(result);
     } catch (error) {
       next(error);

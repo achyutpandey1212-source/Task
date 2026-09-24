@@ -125,6 +125,29 @@ export const AttemptWorkspacePage: React.FC = () => {
     }
   };
 
+  const [retrying, setRetrying] = useState(false);
+
+  const handleRetryEvaluation = async () => {
+    if (!evaluation?.id) return;
+    try {
+      setRetrying(true);
+      setError(null);
+      setSuccessMessage('Retrying evaluation on your submitted design...');
+
+      const result = await evaluationService.retry(evaluation.id);
+
+      // Transition local state to EVALUATING and resume polling
+      setAttempt((prev) => (prev ? { ...prev, status: 'EVALUATING' } : null));
+      setEvaluation((prev) => (prev ? { ...prev, status: 'PENDING', errorMessage: null } : null));
+
+      startPolling(result.evaluationId);
+    } catch (err: any) {
+      setError(err?.response?.data?.error?.message || err.message || 'Retry failed');
+    } finally {
+      setRetrying(false);
+    }
+  };
+
   const handleStartNewAttempt = async () => {
     if (!problem) return;
     try {
@@ -357,48 +380,112 @@ export const AttemptWorkspacePage: React.FC = () => {
               )}
 
               {/* ========================================================================= */}
-              {/* FAILED EVALUATION NOTICE                                                  */}
+              {/* FAILED EVALUATION RECOVERY NOTICE                                         */}
               {/* ========================================================================= */}
               {isFailed && (
                 <div
                   style={{
                     backgroundColor: '#FEF2F2',
                     border: '2px solid #b91c1c',
-                    padding: '28px',
-                    boxShadow: '4px 4px 0px #b91c1c',
+                    padding: '32px 28px',
+                    boxShadow: '5px 5px 0px #b91c1c',
                     marginBottom: '36px',
+                    position: 'relative',
                   }}
                 >
                   <div
                     style={{
                       fontFamily: "'JetBrains Mono', monospace",
-                      fontSize: '16px',
+                      fontSize: '11px',
+                      fontWeight: 800,
+                      backgroundColor: '#b91c1c',
+                      color: '#FFFFFF',
+                      padding: '2px 8px',
+                      display: 'inline-block',
+                      marginBottom: '10px',
+                    }}
+                  >
+                    EVALUATION RECOVERY
+                  </div>
+
+                  <h2
+                    style={{
+                      fontSize: '22px',
                       fontWeight: 900,
                       color: '#991b1b',
-                      marginBottom: '8px',
+                      margin: '0 0 8px 0',
+                      letterSpacing: '-0.01em',
                     }}
                   >
-                    THE REVIEW COULD NOT BE COMPLETED
-                  </div>
-                  <p style={{ margin: '0 0 16px 0', fontSize: '14px', color: '#333333' }}>
-                    {evaluation?.errorMessage ||
-                      'The AI evaluation providers were temporarily unavailable. Your submitted design is preserved in the database.'}
-                  </p>
-                  <button
-                    onClick={handleStartNewAttempt}
+                    REVIEW COULDN'T BE COMPLETED
+                  </h2>
+
+                  <p
                     style={{
-                      backgroundColor: '#000000',
-                      color: '#FFFFFF',
-                      border: '2px solid #000000',
-                      padding: '8px 18px',
-                      fontFamily: "'JetBrains Mono', monospace",
-                      fontSize: '12px',
-                      fontWeight: 700,
-                      cursor: 'pointer',
+                      margin: '0 0 16px 0',
+                      fontSize: '15px',
+                      color: '#1f2937',
+                      lineHeight: 1.5,
+                      maxWidth: '700px',
                     }}
                   >
-                    START A NEW ATTEMPT →
-                  </button>
+                    {evaluation?.errorMessage ||
+                      'The evaluation service is temporarily unavailable. Your design is safe. You can try the review again without re-entering your design.'}
+                  </p>
+
+                  {/* Handwritten Annotation */}
+                  <div style={{ marginBottom: '22px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span
+                      className="font-hand"
+                      style={{
+                        fontSize: '19px',
+                        color: '#4b5563',
+                        transform: 'rotate(-1deg)',
+                        display: 'inline-block',
+                      }}
+                    >
+                      your design is still here. the reviewer just needs another shot. →
+                    </span>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '14px', alignItems: 'center' }}>
+                    <button
+                      onClick={handleRetryEvaluation}
+                      disabled={retrying}
+                      style={{
+                        backgroundColor: '#FEDE8C',
+                        color: '#000000',
+                        border: '2px solid #000000',
+                        padding: '10px 22px',
+                        fontFamily: "'JetBrains Mono', monospace",
+                        fontSize: '13px',
+                        fontWeight: 900,
+                        cursor: retrying ? 'not-allowed' : 'pointer',
+                        boxShadow: '3px 3px 0px #000000',
+                        transition: 'transform 0.1s ease',
+                      }}
+                    >
+                      {retrying ? 'RETRYING YOUR REVIEW...' : 'TRY EVALUATION AGAIN →'}
+                    </button>
+
+                    <button
+                      onClick={handleStartNewAttempt}
+                      style={{
+                        backgroundColor: '#FFFFFF',
+                        color: '#000000',
+                        border: '2px solid #000000',
+                        padding: '10px 22px',
+                        fontFamily: "'JetBrains Mono', monospace",
+                        fontSize: '13px',
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                        boxShadow: '3px 3px 0px #000000',
+                      }}
+                    >
+                      START A NEW ATTEMPT
+                    </button>
+                  </div>
                 </div>
               )}
 

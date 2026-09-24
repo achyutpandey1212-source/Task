@@ -8,4 +8,11 @@ export const evaluationService = {
     );
     return response.data.evaluation;
   },
+
+  async retry(id: string): Promise<{ status: string; evaluationId: string; attemptId: string }> {
+    const response = await api.post<{ status: string; evaluationId: string; attemptId: string }>(
+      `/api/evaluations/${id}/retry`
+    );
+    return response.data;
+  },
 };

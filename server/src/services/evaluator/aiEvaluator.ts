@@ -5,14 +5,28 @@ import { AIProvider, EvaluationContext } from '../ai/aiProvider.js';
 import { GeminiProvider } from '../ai/geminiProvider.js';
 import { GroqProvider } from '../ai/groqProvider.js';
 import { ServiceUnavailableError } from '../../shared/errors/AppError.js';
+import { isTransientError, getExponentialBackoffDelay } from './retryHelper.js';
+
+export interface AIEvaluatorOptions {
+  maxRetries?: number;
+  initialRetryDelayMs?: number;
+  maxRetryDelayMs?: number;
+}
 
 export class AIEvaluator implements Evaluator {
   private providers: AIProvider[];
+  private maxRetries: number;
+  private initialRetryDelayMs: number;
+  private maxRetryDelayMs: number;
 
-  constructor(providers?: AIProvider[]) {
-    this.providers = providers && providers.length > 0
-      ? providers
-      : [new GeminiProvider(), new GroqProvider()];
+  constructor(providers?: AIProvider[], options?: AIEvaluatorOptions) {
+    this.providers =
+      providers && providers.length > 0
+        ? providers
+        : [new GeminiProvider(), new GroqProvider()];
+    this.maxRetries = options?.maxRetries ?? 3;
+    this.initialRetryDelayMs = options?.initialRetryDelayMs ?? 1000;
+    this.maxRetryDelayMs = options?.maxRetryDelayMs ?? 4000;
   }
 
   async evaluate(problem: IProblem, submission: ISubmission): Promise<EvaluatorResult> {
@@ -33,32 +47,68 @@ export class AIEvaluator implements Evaluator {
     };
 
     let lastError: Error | null = null;
+    let anyTransientInCycle = false;
 
-    // Provider Fallback chain: Provider 1 (Gemini) -> Provider 2 (Groq)
-    for (const provider of this.providers) {
-      try {
-        console.log(`[AIEvaluator] Attempting evaluation using provider: ${provider.name}`);
-        const response = await provider.generateEvaluation(context);
-        console.log(`[AIEvaluator] Evaluation successfully completed with provider: ${provider.name}`);
+    // Retry cycle: initial attempt (retry = 0) followed by up to maxRetries
+    for (let retryCount = 0; retryCount <= this.maxRetries; retryCount++) {
+      if (retryCount > 0) {
+        const delay = getExponentialBackoffDelay(
+          retryCount - 1,
+          this.initialRetryDelayMs,
+          this.maxRetryDelayMs
+        );
+        console.log(
+          `[evaluation] backoff retry=${retryCount}/${this.maxRetries} delayMs=${delay}`
+        );
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
 
-        // Deterministic backend calculation of overallScore
-        const total = response.parsed.criteria.reduce((sum, c) => sum + c.score, 0);
-        const overallScore = Math.round((total / response.parsed.criteria.length) * 10) / 10;
+      console.log(`[evaluation] start cycle attempt=${retryCount + 1}/${this.maxRetries + 1}`);
+      anyTransientInCycle = false;
 
-        return {
-          summary: response.parsed.summary,
-          overallScore,
-          criteria: response.parsed.criteria,
-          provider: provider.name,
-        };
-      } catch (err: unknown) {
-        lastError = err as Error;
-        console.warn(`[AIEvaluator] Provider ${provider.name} failed:`, lastError.message);
+      // Provider Fallback chain: Gemini (with inner model fallback) -> Groq
+      for (const provider of this.providers) {
+        try {
+          console.log(`[evaluation] provider_attempt provider=${provider.name}`);
+          const response = await provider.generateEvaluation(context);
+          console.log(`[evaluation] completed provider=${provider.name}`);
+
+          // Deterministic backend calculation of overallScore
+          const total = response.parsed.criteria.reduce((sum, c) => sum + c.score, 0);
+          const overallScore = Math.round((total / response.parsed.criteria.length) * 10) / 10;
+
+          return {
+            summary: response.parsed.summary,
+            overallScore,
+            criteria: response.parsed.criteria,
+            provider: provider.name,
+          };
+        } catch (err: unknown) {
+          lastError = err as Error;
+          const isTransient = isTransientError(err);
+          if (isTransient) {
+            anyTransientInCycle = true;
+          }
+          console.warn(
+            `[evaluation] ${isTransient ? 'transient_failure' : 'non_transient_failure'} provider=${provider.name}: ${lastError.message}`
+          );
+        }
+      }
+
+      // If no providers succeeded and none had transient errors (e.g., all 400 Bad Request or invalid auth without network issue),
+      // stop retrying early.
+      if (!anyTransientInCycle && retryCount === 0) {
+        console.warn('[evaluation] All provider failures were non-transient. Skipping further retries.');
+        break;
       }
     }
 
+    console.error(
+      `[evaluation] permanently_failed after retries. Last error: ${lastError?.message || 'Unknown error'}`
+    );
+
     throw new ServiceUnavailableError(
-      `All AI evaluation providers failed. Last error: ${lastError?.message || 'Unknown provider error'}`
+      `All AI evaluation providers failed after retries. Last error: ${lastError?.message || 'Unknown provider error'}`
     );
   }
 }

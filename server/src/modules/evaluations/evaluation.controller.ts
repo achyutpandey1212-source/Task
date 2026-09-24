@@ -14,6 +14,9 @@ export class EvaluationController {
         req.user.id
       );
 
+      // Map safe learner-facing evaluation data (never expose raw provider diagnostics in errorMessage to client)
+      const safeErrorMessage = evaluation.publicError?.message || (evaluation.status === 'FAILED' ? 'The evaluation service is temporarily unavailable. Your design is safe. Please try again.' : undefined);
+
       res.status(200).json({
         status: evaluation.status,
         evaluation: {
@@ -24,10 +27,32 @@ export class EvaluationController {
           overallScore: evaluation.overallScore,
           summary: evaluation.summary,
           criteria: evaluation.criteria,
-          errorMessage: evaluation.errorMessage,
+          errorMessage: safeErrorMessage,
+          publicError: evaluation.publicError,
           createdAt: evaluation.createdAt,
           completedAt: evaluation.completedAt,
         },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async retry(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user) {
+        throw new UnauthorizedError('User not authenticated');
+      }
+
+      const evaluation = await evaluationService.retryEvaluation(
+        req.params.id as string,
+        req.user.id
+      );
+
+      res.status(200).json({
+        status: evaluation.status,
+        evaluationId: evaluation._id.toString(),
+        attemptId: evaluation.attemptId.toString(),
       });
     } catch (error) {
       next(error);
