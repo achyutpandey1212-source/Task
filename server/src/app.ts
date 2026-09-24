@@ -3,6 +3,8 @@ import cors from 'cors';
 import { env } from './config/env.js';
 import { isDatabaseConnected } from './config/database.js';
 import { authRouter } from './modules/auth/auth.routes.js';
+import { problemRouter } from './modules/problems/problem.routes.js';
+import { attemptRouter } from './modules/attempts/attempt.routes.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { NotFoundError } from './shared/errors/AppError.js';
 
@@ -38,6 +40,12 @@ export function createApp(): Application {
 
   // Auth routes
   app.use('/api/auth', authRouter);
+
+  // Problem routes (Public)
+  app.use('/api/problems', problemRouter);
+
+  // Attempt routes (Authenticated)
+  app.use('/api/attempts', attemptRouter);
 
   // Catch unhandled 404 routes
   app.use((_req: Request, _res: Response, next) => {
