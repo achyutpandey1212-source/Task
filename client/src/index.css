@@ -2,28 +2,62 @@
   box-sizing: border-box;
 }
 
+:root {
+  --color-paper: #F4F3F3;
+  --color-white: #FFFFFF;
+  --color-lavender: #D5BDFF;
+  --color-lavender-deep: #CCB4F5;
+  --color-yellow: #FEDE8C;
+  --color-black: #000000;
+  --color-charcoal: #333333;
+  --color-grid: #E7E5E5;
+}
+
 body {
   margin: 0;
   padding: 0;
-  background-color: #0c0e12;
-  color: #e2e8f0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  background-color: var(--color-paper);
+  color: var(--color-black);
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 a {
-  color: #f59e0b;
+  color: inherit;
   text-decoration: none;
-  transition: color 0.15s ease;
 }
 
-a:hover {
-  color: #fbbf24;
+.font-hand {
+  font-family: 'Kalam', 'Caveat', cursive;
 }
 
-code, pre, .font-mono {
-  font-family: 'JetBrains Mono', 'Fira Code', 'Roboto Mono', Menlo, Monaco, Consolas, monospace;
+.font-mono {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Notebook Graph Paper Background */
+.bg-graph-paper {
+  background-color: #F4F3F3;
+  background-image: 
+    linear-gradient(to right, #E7E5E5 1px, transparent 1px),
+    linear-gradient(to bottom, #E7E5E5 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+/* Subtle torn paper effect using layered SVG or CSS mask */
+.torn-paper-edge-top {
+  position: relative;
+}
+.torn-paper-edge-top::before {
+  content: "";
+  position: absolute;
+  top: -8px;
+  left: 0;
+  right: 0;
+  height: 8px;
+  background: radial-gradient(circle at 10px 8px, transparent 8px, currentColor 8.5px);
+  background-size: 20px 8px;
 }
 
 /* Accessible outline on keyboard focus */
@@ -31,8 +65,8 @@ button:focus-visible,
 a:focus-visible,
 input:focus-visible,
 textarea:focus-visible {
-  outline: 2px solid #f59e0b;
-  outline-offset: 2px;
+  outline: 2px solid #000000;
+  outline-offset: 3px;
 }
 
 /* Reduced motion preference */
